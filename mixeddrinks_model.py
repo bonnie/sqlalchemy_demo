@@ -2,29 +2,42 @@
 
     ****** NOTE: be sure to create a db named mixeddrinks ******
 
-    Ways to work with this data model: 
+    Ways to work with this data model:
 
     First clear the db, just in case
     >>> db.drop_all()
     >>> db.create_all()
 
-    Make a drink: 
+    Make a drink:
     >>> marge = MixedDrink(drink_name='margarita')
 
-    Is it in the db? No.
+    Does it have an id yet? No.
+    >>> marge
+    <MixedDrink drink_id=None drink_name=margarita>
+
+    Is it in the session? No.
     >>> MixedDrink.query.all()
     []
 
-    How about after adding? No.
+    How about after adding? Now it is, and it has an ID.
     >>> db.session.add(marge)
     >>> MixedDrink.query.all()
+    [<MixedDrink drink_id=1 drink_name=margarita>]
+
+    But you can always roll back and remove it, if it hasn't been committed
+    >>> db.session.rollback()
+    >>> MixedDrink.query.all()
     []
 
-    How about after committing? Now marge has an ID! 
+    How about after committing? Now marge is actually in the db, even if there
+    were a rollback.
+    >>> db.session.add(marge)
     >>> db.session.commit()
-    >>> marge
-    <MixedDrink drink_id=1 drink_name=margarita>
- 
+    >>> MixedDrink.query.all()
+    [<MixedDrink drink_id=1 drink_name=margarita>]
+
+    >>> db.session.rollback()
+
     But no components
     >>> marge.components
     []
@@ -64,15 +77,15 @@
     >>> marge.components
     [<Ingredient ingredient_id=1 ingredient_name=tequila>, <Ingredient ingredient_id=None ingredient_name=lime juice>]
 
-    Now if we commit, limey is committed even though it wasn't added, because 
+    Now if we commit, limey is committed even though it wasn't added, because
     it's included in the change to marge, and marge *has* been added
     >>> db.session.commit()
 
-    What drinks contain tequila? 
+    What drinks contain tequila?
     >>> teq.libations
     [<MixedDrink drink_id=1 drink_name=margarita>]
 
-    What drinks contain lime juice? 
+    What drinks contain lime juice?
     >>> limey.libations
     [<MixedDrink drink_id=1 drink_name=margarita>]
 
@@ -82,17 +95,17 @@
     >>> sunny.components
     [<Ingredient ingredient_id=1 ingredient_name=tequila>]
 
-    Now what drinks contain tequila? 
+    Now what drinks contain tequila?
     >>> teq.libations
     [<MixedDrink drink_id=1 drink_name=margarita>, <MixedDrink drink_id=None drink_name=tequila sunrise>]
 
-    And lime? 
+    And lime?
     >>> limey.libations
     [<MixedDrink drink_id=1 drink_name=margarita>]
 
-    What can we do with marge? 
+    What can we do with marge?
     >>> dir(marge)
-    ['__class__', '__delattr__', '__dict__', '__doc__', '__format__', '__getattribute__', '__hash__', '__init__', '__mapper__', '__mapper_cls__', '__module__', '__new__', '__reduce__', '__reduce_ex__', '__repr__', '__setattr__', '__sizeof__', '__str__', '__subclasshook__', '__table__', '__tablename__', '__weakref__', '_decl_class_registry', '_sa_class_manager', '_sa_instance_state', 'components', 'drink_id', 'drink_name', 'metadata', 'query', 'query_class']
+    ['__class__', '__delattr__', '__dict__', '__doc__', '__format__', '__getattribute__', '__hash__', '__init__', '__mapper__', '__module__', '__new__', '__reduce__', '__reduce_ex__', '__repr__', '__setattr__', '__sizeof__', '__str__', '__subclasshook__', '__table__', '__tablename__', '__weakref__', '_decl_class_registry', '_sa_class_manager', '_sa_instance_state', 'components', 'drink_id', 'drink_name', 'metadata', 'query', 'query_class']
 
     We can add more ingredients to the tequlia sunrise
     >>> oj = Ingredient(ingredient_name='orange juice')
@@ -128,52 +141,57 @@ db = SQLAlchemy()
 # Model definitions
 
 class Ingredient(db.Model):
-    """Type of ingredient"""
+    """Type of ingredient, which can be used in drinks."""
 
     __tablename__ = "ingredients"
 
     ingredient_id = db.Column(db.Integer, autoincrement=True, primary_key=True)
-    ingredient_name = db.Column(db.String(32))
+    ingredient_name = db.Column(db.String(32), nullable=False)
 
-    # libations is the attribute name to get the drinks associated with 
+    # libations is the attribute name to get the drinks associated with
     # this ingredient
-    
-    # components is the attribute name to get the ingredients associated 
+
+    # components is the attribute name to get the ingredients associated
     # with a MixedDrink object
-    
-    libations = db.relationship('MixedDrink', secondary='drink_ingredients',
-                            backref='components')
+
+    libations = db.relationship('MixedDrink',
+                                secondary='drink_ingredients',
+                                backref='components')
 
     def __repr__(self):
         """Provide helpful representation when printed."""
 
-        return "<Ingredient ingredient_id=%s ingredient_name=%s>" % (
+        return "<Ingredient ingredient_id={} ingredient_name={}>".format(
                                     self.ingredient_id, self.ingredient_name)
 
+
 class MixedDrink(db.Model):
+    """Type of drink, which can contain ingredients."""
 
     __tablename__ = 'drinks'
 
     drink_id = db.Column(db.Integer, autoincrement=True, primary_key=True)
-    drink_name = db.Column(db.String(32))
+    drink_name = db.Column(db.String(32), nullable=False)
 
-    # this is a reasonable alternative to line 32
-    # components = db.relationship('Ingredients', secondary='drink_ingredients',
-    #                         backref='libations')
+    # this is a reasonable alternative to the line starting "libations=" in the
+    # Ingredient class:
+    #
+    # components = db.relationship('Ingredients',
+    #                               secondary='drink_ingredients',
+    #                               backref='libations')
 
 
     def __repr__(self):
         """Provide helpful representation when printed."""
 
-        return "<MixedDrink drink_id=%s drink_name=%s>" % (
+        return "<MixedDrink drink_id={} drink_name={}>".format(
                                     self.drink_id, self.drink_name)
 
 
 class DrinkIngredient(db.Model):
-    """association table between drinks and ingredients"""
+    """Association table between drinks and ingredients."""
 
     # this is an association table; it does not contain any interesting fields
-    # Noelis would call it 'frankentable'
 
     __tablename__ = 'drink_ingredients'
 
@@ -190,6 +208,7 @@ def connect_to_db(app, db_uri='postgresql:///mixeddrinks'):
 
     # Configure to use our PostgreSQL database
     app.config['SQLALCHEMY_DATABASE_URI'] = db_uri
+    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 #    app.config['SQLALCHEMY_ECHO'] = True
     db.app = app
     db.init_app(app)
@@ -199,11 +218,8 @@ if __name__ == '__main__':
     connect_to_db(app)
     db.create_all()
 
-    print "connected to DB"   
+    print "connected to DB"
 
     import doctest
-
     if doctest.testmod().failed == 0:
-        print "\n*** ALL TESTS PASS! GO HAVE A DRINK!\n"                   
-
- 
+        print "\n*** ALL TESTS PASS! GO HAVE A DRINK!\n"
