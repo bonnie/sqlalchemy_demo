@@ -37,6 +37,8 @@
     [<MixedDrink drink_id=1 drink_name=margarita>]
 
     >>> db.session.rollback()
+    >>> MixedDrink.query.all()
+    [<MixedDrink drink_id=1 drink_name=margarita>]
 
     But no components
     >>> marge.components
